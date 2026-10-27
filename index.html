@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#1e3a5f">
+<link rel="icon" href="icon-192.png"><title>My Voice</title>
+<style>
+:root{--s:150px}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+input{-webkit-user-select:text;user-select:text}
+html,body{margin:0;min-height:100%;font-family:system-ui,sans-serif;background:#f4f1ea;color:#222;overscroll-behavior:contain}
+#bar{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#1e3a5f;color:#fff;position:sticky;top:0;z-index:2;min-height:64px}
+.edit #bar{background:#7a3e00}
+#bar h1{flex:1;margin:0;font-size:24px}
+#bar button{font-size:22px;padding:10px 16px;border:0;border-radius:12px;background:#fff3;color:#fff}
+#bar .home{background:#fff;color:#1e3a5f;font-weight:700}
+#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--s),1fr));gap:12px;padding:12px}
+.t{min-height:var(--s);border:0;border-radius:20px;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-size:22px;font-weight:700;padding:8px;box-shadow:0 4px 0 #0003;overflow:hidden;text-shadow:0 1px 3px #0007}
+.t .e{font-size:calc(var(--s)*.4);line-height:1}
+.t img{width:75%;height:calc(var(--s)*.55);object-fit:cover;border-radius:12px}
+.t:active,.t.tap{transform:scale(.94)}
+.add{background:#fff;color:#888;border:3px dashed #aaa;box-shadow:none;text-shadow:none}
+#dlg{display:none;position:fixed;inset:0;background:#0008;z-index:5;overflow:auto;padding:12px}
+#dlg.on{display:block}
+.card{background:#fff;border-radius:16px;padding:16px;max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:10px}
+.card h2{margin:0}
+.card label{display:flex;flex-direction:column;font-size:14px;gap:4px}
+.card input,.card select{font-size:18px;padding:8px}
+.card button{font-size:17px;padding:10px 14px;border-radius:10px;border:1px solid #ccc;background:#f3f3f3}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.card .pri{background:#1e3a5f;color:#fff;border-color:#1e3a5f}
+.card .dng{color:#b00020}
+</style></head><body>
+<header id="bar"></header><main id="grid"></main><div id="dlg"></div>
+<script>
+const $=s=>document.querySelector(s),g=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const uid=()=>Math.random().toString(36).slice(2,10);
+const DB={db:null,
+ open(){return new Promise((res,rej)=>{const r=indexedDB.open('myvoice',1);r.onupgradeneeded=()=>{r.result.createObjectStore('kv');r.result.createObjectStore('audio')};r.onsuccess=()=>{this.db=r.result;res()};r.onerror=()=>rej(r.error)})},
+ tx(s,m,f){return new Promise((res,rej)=>{const t=this.db.transaction(s,m);const q=f(t.objectStore(s));t.oncomplete=()=>res(q&&q.result);t.onerror=()=>rej(t.error)})},
+ get(s,k){return this.tx(s,'readonly',o=>o.get(k))},
+ put(s,k,v){return this.tx(s,'readwrite',o=>o.put(v,k))},
+ del(s,k){return this.tx(s,'readwrite',o=>o.delete(k))}};
+const L=(a,p)=>a.map(([l,e,s])=>({id:uid(),label:l,emoji:e,say:s||p+l.toLowerCase()}));
+const seed=()=>({pin:'1234',rate:.9,pitch:1,voice:'',size:150,cats:[
+ {id:uid(),label:'Food',emoji:'🍎',color:'#e76f51',items:L([['Snack','🍪'],['Drink','🥤'],['Water','💧'],['Juice','🧃'],['Milk','🥛'],['Apple','🍎'],['Banana','🍌'],['Pizza','🍕'],['Cereal','🥣'],['Sandwich','🥪'],['Ice cream','🍦'],['Yogurt','🍶']],'I want ')},
+ {id:uid(),label:'Movies',emoji:'🎬',color:'#7b2cbf',items:L([['Movie','🎬','I want to watch a movie'],['TV','📺','I want to watch TV'],['Cartoon','🐭','I want to watch a cartoon'],['Music','🎵','I want music'],['Popcorn','🍿','I want popcorn'],['Again','🔁','Play it again'],['Different one','⏭️','I want a different one'],['Louder','🔊','Turn it up'],['Quieter','🔉','Turn it down']],'')},
+ {id:uid(),label:'Places',emoji:'📍',color:'#2a9d8f',items:L([['Park','🌳'],['Home','🏠'],['Store','🛒'],['Playground','🛝'],['Car','🚗'],['Pool','🏊'],['Library','📚'],['School','🏫'],['Bathroom','🚽','I need the bathroom']],'I want to go to the ')},
+ {id:uid(),label:'People',emoji:'👨‍👩‍👧',color:'#e09f3e',items:L([['Mom','👩'],['Dad','👨'],['Grandma','👵'],['Grandpa','👴'],['Brother','👦'],['Sister','👧'],['Teacher','🧑‍🏫'],['Friend','🧒']],'I want ')},
+ {id:uid(),label:'Help',emoji:'🆘',color:'#457b9d',items:L([['Help','🆘','I need help'],['More','🙌','More please'],['All done','✋','All done'],['Stop','🛑','Stop'],['Yes','✅','Yes'],['No','❌','No'],['Hurt','🤕','I am hurt'],['Break','😮‍💨','I need a break']],'')}
+]});
+let S,view=null,edit=false,cur=null;
+const save=()=>DB.put('kv','s',S);
+const catOf=()=>S.cats.find(c=>c.id===view);
+
+async function say(it,el){
+ if(el){el.classList.add('tap');setTimeout(()=>el.classList.remove('tap'),300)}
+ speechSynthesis.cancel();if(cur)cur.pause();
+ if(it.audio){const b=await DB.get('audio',it.id);if(b){const u=URL.createObjectURL(b);cur=new Audio(u);cur.onended=()=>URL.revokeObjectURL(u);cur.play();return}}
+ const u=new SpeechSynthesisUtterance(it.say||it.label);u.rate=S.rate;u.pitch=S.pitch;
+ const v=speechSynthesis.getVoices().find(v=>v.name===S.voice);if(v)u.voice=v;speechSynthesis.speak(u);
+}
+function render(){
+ document.body.className=edit?'edit':'';
+ document.documentElement.style.setProperty('--s',S.size+'px');
+ const cat=catOf(),list=cat?cat.items:S.cats;
+ $('#bar').innerHTML=(cat?'<button class="home" data-a="home">🏠 Home</button>':'')+
+  `<h1>${cat?esc(cat.label):'My Voice'}${edit?' ✏️':''}</h1>`+
+  (edit?'<button data-a="set">⚙️</button><button data-a="done">Done</button>':'<button data-a="lock">🔒</button>');
+ $('#grid').innerHTML=list.map((x,i)=>`<button class="t" data-i="${i}" style="background:${x.color||(cat&&cat.color)}">${x.img?`<img src="${x.img}">`:`<span class="e">${esc(x.emoji)}</span>`}<span>${esc(x.label)}</span></button>`).join('')+
+  (edit?'<button class="t add" data-a="add"><span class="e">＋</span>Add</button>':'');
+}
+document.addEventListener('click',e=>{
+ if(e.target.closest('#dlg'))return;
+ const b=e.target.closest('[data-a],[data-i]');if(!b)return;
+ const a=b.dataset.a,cat=catOf(),list=cat?cat.items:S.cats;
+ if(a==='home'){view=null;render();scrollTo(0,0)}
+ else if(a==='lock'){const p=prompt('Enter PIN to edit');if(p===S.pin){edit=true;render()}else if(p!==null)alert('Wrong PIN')}
+ else if(a==='done'){edit=false;render()}
+ else if(a==='set')settings();
+ else if(a==='add')editor(null,list,!cat);
+ else if(b.dataset.i!=null){
+  const it=list[+b.dataset.i];
+  if(edit)editor(it,list,!cat);
+  else if(!cat){view=it.id;render();scrollTo(0,0)}
+  else say(it,b);
+ }
+});
+const shrink=f=>new Promise(r=>{const i=new Image();i.onload=()=>{const k=Math.min(1,320/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=i.width*k;c.height=i.height*k;c.getContext('2d').drawImage(i,0,0,c.width,c.height);URL.revokeObjectURL(i.src);r(c.toDataURL('image/jpeg',.8))};i.src=URL.createObjectURL(f)});
+
+function editor(it,list,isCat){
+ const isNew=!it,pc=catOf();
+ it=it?{...it}:{id:uid(),label:'',say:'',emoji:'⭐',color:isCat?'#2a9d8f':''};
+ let blob=null,gone=false,mr=null,chunks=[];
+ const d=$('#dlg'),close=()=>{d.className=''};d.className='on';
+ d.innerHTML=`<div class="card"><h2>${isNew?'Add':'Edit'} ${isCat?'category':'button'}</h2>
+ <label>Label<input id="f_l" value="${esc(it.label)}"></label>
+ ${isCat?'':`<label>Says out loud (blank = label)<input id="f_s" value="${esc(it.say)}"></label>`}
+ <label>Emoji<input id="f_e" value="${esc(it.emoji)}"></label>
+ <label>Color<input type="color" id="f_c" value="${it.color||(pc&&pc.color)||'#2a9d8f'}"></label>
+ <label>Picture (replaces emoji)<input type="file" id="f_p" accept="image/*"></label>
+ <div class="row"><span id="pv">${it.img?'🖼️ picture set':''}</span><button id="f_rp">Remove picture</button></div>
+ ${isCat?'':`<div class="row"><button id="a_r">🎙️ Record</button><button id="a_p">▶️ Play</button><button id="a_d">Delete recording</button><span id="a_s">${it.audio?'recording saved':'using tablet voice'}</span></div>`}
+ ${isNew?'':'<div class="row"><button id="f_ml">◀ Move</button><button id="f_mr">Move ▶</button><button id="f_x" class="dng">Delete</button></div>'}
+ <div class="row"><button id="f_cx">Cancel</button><button id="f_ok" class="pri">Save</button></div></div>`;
+ g('f_p').onchange=async e=>{if(e.target.files[0]){it.img=await shrink(e.target.files[0]);g('pv').textContent='🖼️ picture set'}};
+ g('f_rp').onclick=()=>{delete it.img;g('pv').textContent=''};
+ if(!isCat){
+  g('a_r').onclick=async()=>{
+   if(mr&&mr.state==='recording'){mr.stop();return}
+   try{const st=await navigator.mediaDevices.getUserMedia({audio:true});
+    mr=new MediaRecorder(st);chunks=[];mr.ondataavailable=e=>chunks.push(e.data);
+    mr.onstop=()=>{blob=new Blob(chunks,{type:mr.mimeType});gone=false;st.getTracks().forEach(t=>t.stop());g('a_r').textContent='🎙️ Re-record';g('a_s').textContent='new recording (tap Save)'};
+    mr.start();g('a_r').textContent='⏹ Stop';g('a_s').textContent='recording…';
+   }catch(x){alert('Microphone not available (needs HTTPS and permission)')}};
+  g('a_p').onclick=async()=>{const b=blob||(!gone&&it.audio&&await DB.get('audio',it.id));if(b)new Audio(URL.createObjectURL(b)).play();else alert('No recording')};
+  g('a_d').onclick=()=>{blob=null;gone=true;g('a_s').textContent='using tablet voice'};
+ }
+ g('f_ok').onclick=async()=>{
+  it.label=g('f_l').value.trim()||'?';it.emoji=g('f_e').value;
+  const c=g('f_c').value;it.color=(!isCat&&pc&&c===pc.color)?'':c;
+  if(!isCat){it.say=g('f_s').value.trim();
+   if(blob){await DB.put('audio',it.id,blob);it.audio=true}
+   else if(gone){await DB.del('audio',it.id);it.audio=false}}
+  else if(!it.items)it.items=[];
+  const i=list.findIndex(x=>x.id===it.id);if(i<0)list.push(it);else list[i]=it;
+  await save();close();render();
+ };
+ g('f_cx').onclick=close;
+ if(!isNew){
+  const mv=async n=>{const i=list.findIndex(x=>x.id===it.id),j=i+n;if(j<0||j>=list.length)return;[list[i],list[j]]=[list[j],list[i]];await save();close();render()};
+  g('f_ml').onclick=()=>mv(-1);g('f_mr').onclick=()=>mv(1);
+  g('f_x').onclick=async()=>{if(!confirm('Delete "'+it.label+'"?'))return;
+   const i=list.findIndex(x=>x.id===it.id),old=list[i];list.splice(i,1);
+   for(const x of (isCat?old.items:[old]))await DB.del('audio',x.id);
+   await save();close();render()};
+ }
+}
+function settings(){
+ const d=$('#dlg'),vs=speechSynthesis.getVoices();d.className='on';
+ d.innerHTML=`<div class="card"><h2>Settings</h2>
+ <label>Tile size<input type="range" id="s_z" min="100" max="240" value="${S.size}"></label>
+ <label>Voice<select id="s_v"><option value="">Default</option>${vs.map(v=>`<option value="${esc(v.name)}">${esc(v.name)}</option>`).join('')}</select></label>
+ <label>Speed<input type="range" id="s_r" min="0.5" max="1.5" step="0.1" value="${S.rate}"></label>
+ <label>Pitch<input type="range" id="s_p" min="0.5" max="1.5" step="0.1" value="${S.pitch}"></label>
+ <label>PIN<input id="s_n" inputmode="numeric" value="${esc(S.pin)}"></label>
+ <div class="row"><button id="s_t">🔊 Test voice</button><button id="s_x">Export backup</button><button id="s_i">Import backup</button></div>
+ <button id="s_c" class="pri">Save &amp; close</button></div>`;
+ g('s_v').value=S.voice;
+ const read=()=>{S.size=+g('s_z').value;S.voice=g('s_v').value;S.rate=+g('s_r').value;S.pitch=+g('s_p').value;S.pin=g('s_n').value||'1234'};
+ g('s_t').onclick=()=>{read();say({label:'Hello, I am ready'})};
+ g('s_c').onclick=async()=>{read();await save();d.className='';render()};
+ g('s_x').onclick=async()=>{
+  read();await save();
+  const keys=await DB.tx('audio','readonly',o=>o.getAllKeys()),audio={};
+  for(const k of keys){const b=await DB.get('audio',k);audio[k]=await new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(b)})}
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify({v:1,S,audio})],{type:'application/json'}));
+  a.download='myvoice-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click();
+ };
+ g('s_i').onclick=()=>{
+  const inp=document.createElement('input');inp.type='file';inp.accept='.json,application/json';
+  inp.onchange=async()=>{try{
+   const j=JSON.parse(await inp.files[0].text());
+   if(!j.S||!j.S.cats)throw 0;
+   if(!confirm('Replace everything on this tablet with this backup?'))return;
+   await DB.tx('audio','readwrite',o=>o.clear());
+   for(const k in j.audio)await DB.put('audio',k,await (await fetch(j.audio[k])).blob());
+   S=j.S;await save();view=null;d.className='';render();
+  }catch(x){alert('Could not read that backup file')}};
+  inp.click();
+ };
+}
+(async()=>{
+ await DB.open();S=(await DB.get('kv','s'))||seed();await save();
+ speechSynthesis.getVoices();render();
+ if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
+ if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+})();
+</script></body></html>
